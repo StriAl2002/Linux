@@ -1,14 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "tree_utils.h"
-
-// Структура для узла бинарного дерева
-typedef struct TreeNode {
-    int value;
-    struct TreeNode *left;
-    struct TreeNode *right;
-} TreeNode;
+#include "tree.h"
 
 // Функция для создания нового узла
 TreeNode* createNode(int value) {

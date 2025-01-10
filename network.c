@@ -1,69 +1,76 @@
+#define PORT 5000
+
+#include <unistd.h>      // Для gethostname
+#include <netdb.h>       // Для getaddrinfo
+#include <sys/socket.h>  // Для сокетов
+#include <arpa/inet.h>   // Для inet_ntoa
+#include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <ifaddrs.h>
-#include <errno.h>
-#include <sys/sysinfo.h>
-#include <pthread.h>
 
-#define PORT 5000  // Порт для связи
+#include "network.h"
 
-// Структура для хранения информации о компьютере
-typedef struct {
+#define MAX_COMPUTERS 10
+
+struct Computer {
     char ip[INET_ADDRSTRLEN];
     int cores;
-} Computer;
+    int isOnline;
+};
+
+// Функция для получения всех доступных компьютеров
+int discoverComputers(Computer *computers, int maxCount) {
+    int count = 0;
+
+    // Получаем имя хоста текущего компьютера
+    char hostname[256];
+    if (gethostname(hostname, sizeof(hostname)) != 0) {
+        perror("Ошибка получения имени хоста");
+        return count;
+    }
+
+    struct addrinfo hints, *res, *p;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;  // IPv4
+    hints.ai_socktype = SOCK_STREAM;
+
+    // Получаем информацию о текущем хосте
+    if (getaddrinfo(hostname, NULL, &hints, &res) != 0) {
+        perror("Ошибка получения информации о хосте");
+        return count;
+    }
+
+    // Получаем IP-адреса всех доступных сетевых интерфейсов
+    for (p = res; p != NULL; p = p->ai_next) {
+        struct sockaddr_in *addr = (struct sockaddr_in *)p->ai_addr;
+        char ip[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &(addr->sin_addr), ip, sizeof(ip));
+
+        // Исключаем локальный IP-адрес (127.0.0.1)
+        if (strcmp(ip, "127.0.0.1") == 0 || strcmp(ip, "localhost") == 0) {
+            continue;
+        }
+
+        // Добавляем компьютер в список
+        if (count < maxCount) {
+            strncpy(computers[count].ip, ip, INET_ADDRSTRLEN);
+            computers[count].cores = 4;  // Примерное количество ядер
+            computers[count].isOnline = 1;  // Компьютер доступен
+            count++;
+        }
+    }
+
+    freeaddrinfo(res);
+
+    return count;
+}
 
 // Функция для проверки доступности компьютера (ping)
 int isReachable(const char *ip) {
     char command[128];
     snprintf(command, sizeof(command), "ping -c 1 -W 1 %s > /dev/null 2>&1", ip);
     return (system(command) == 0);
-}
-
-// Получение доступных компьютеров в локальной сети
-int discoverComputers(Computer *computers, int maxCount) {
-    struct ifaddrs *ifaddr, *ifa;
-    char baseIP[INET_ADDRSTRLEN];
-    int count = 0;
-
-    // Получение базового IP адреса
-    if (getifaddrs(&ifaddr) == -1) {
-        perror("Ошибка получения сетевого интерфейса");
-        exit(EXIT_FAILURE);
-    }
-
-    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
-        if (ifa->ifa_addr && ifa->ifa_addr->sa_family == AF_INET) {
-            struct sockaddr_in *sa = (struct sockaddr_in *)ifa->ifa_addr;
-            inet_ntop(AF_INET, &(sa->sin_addr), baseIP, INET_ADDRSTRLEN);
-
-            // Проверяем, является ли это локальной сетью
-            if (strncmp(baseIP, "192.168.", 8) == 0 || strncmp(baseIP, "10.", 3) == 0) {
-                break;
-            }
-        }
-    }
-
-    freeifaddrs(ifaddr);
-
-    // Пинг всех возможных адресов в подсети
-    char ip[INET_ADDRSTRLEN];
-    for (int i = 1; i < 255; i++) {
-        snprintf(ip, sizeof(ip), "%s.%d", baseIP, i);
-        if (isReachable(ip)) {
-            snprintf(computers[count].ip, sizeof(computers[count].ip), "%s", ip);
-            count++;
-            if (count >= maxCount) {
-                break;
-            }
-        }
-    }
-
-    return count;
 }
 
 // Запрос количества ядер на удалённой машине

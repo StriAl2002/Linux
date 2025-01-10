@@ -2,16 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
-#include "network_utils.h"
-#include "tree_utils.h"
+#include <unistd.h>
+#include "network.h"
+#include "tree.h"
 
 #define CHECK_INTERVAL 5  // Интервал проверки доступности компьютеров
-
-// Структура для хранения информации о компьютере
-typedef struct {
-    char ip[INET_ADDRSTRLEN];
-    int cores;
-} Computer;
 
 // Глобальные переменные
 int *values;      // Массив значений для расчёта
